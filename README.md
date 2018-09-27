@@ -2,7 +2,7 @@ Beyond Filter
 ====
 
 
-How use modern deep learning instead of tradition image digit process ?
+> How use modern deep learning framework instead of tradition image digit process ?
 ----
 
 
