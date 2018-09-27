@@ -2,11 +2,8 @@ Beyond Filter
 ====
 
 
-
-Question
+How use modern deep learning instead of tradition image digit process ?
 ----
-> **Can we use deep learning instead of tradition image digit process ?**
-
 
 
 Gaussian Filter
