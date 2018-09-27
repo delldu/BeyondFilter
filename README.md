@@ -66,6 +66,8 @@ Requirements
 
 - Pytorch 0.4.0
 
+- Torchvision 0.2.1
+
 - Pillow
 
 
