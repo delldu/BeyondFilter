@@ -22,7 +22,7 @@ Gaussian Filter
 
 **Crazy**
 
-You can filter 100000 times in 5 seconds via GPU (GTX 1080) if you like !
+You can filter 100000 times in 5 seconds via GTX 1080 if you like !
 
 
 
