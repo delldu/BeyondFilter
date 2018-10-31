@@ -5,6 +5,11 @@ Beyond Filter
 > How to use modern deep learning framework instead of tradition image digit process ?
 ----
 
+## Demo
+
+```
+./demo.sh
+```
 
 Gaussian Filter
 ----
@@ -59,9 +64,9 @@ Image Enhance
 Requirements
 ----
 
-- Python 3
+- Python 3.6
 
-- Pytorch 0.4.0
+- Pytorch 1.0
 
 - Torchvision 0.2.1
 
