@@ -8,9 +8,11 @@
 
 from PIL import Image, ImageDraw
 from torchvision import transforms
+import torchvision.utils as utils
 
 import torch
 import torch.nn as nn
+import pdb
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -49,6 +51,15 @@ def from_tensor(tensor):
 #     del draw
 
 
+def grid_image(tensor_list, nrow=3):
+    grid = utils.make_grid(
+        torch.cat(tensor_list, dim=0), nrow=nrow)
+    ndarr = grid.mul(255).add_(0.5).clamp_(0, 255).permute(
+        1, 2, 0).to('cpu', torch.uint8).numpy()
+    image = Image.fromarray(ndarr)
+    return image
+
+
 class GaussFilter(nn.Module):
     """
     3x3 Guassian filter
@@ -56,8 +67,7 @@ class GaussFilter(nn.Module):
 
     def __init__(self):
         super(GaussFilter, self).__init__()
-        self.conv = nn.Conv2d(
-            3, 3, kernel_size=3, padding=1, groups=3, bias=False)
+        self.conv = nn.Conv2d(3, 3, kernel_size=3, padding=1, groups=3, bias=False)
 
         # self.conv.bias.data.fill_(0.0)
         self.conv.weight.data.fill_(0.0625)
