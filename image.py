@@ -6,8 +6,8 @@
 # ***
 # ************************************************************************************/
 
-from PIL import Image, ImageDraw
-from torchvision import transforms
+from PIL import Image
+from torchvision import transforms as T
 import torchvision.utils as utils
 
 import torch
@@ -25,7 +25,7 @@ def to_tensor(image):
     """
     return 1xCxHxW tensor
     """
-    transform = transforms.Compose([transforms.ToTensor()])
+    transform = T.Compose([T.ToTensor()])
     t = transform(image)
     return t.unsqueeze(0).to(device)
 
@@ -34,21 +34,8 @@ def from_tensor(tensor):
     """
     tensor format: 1xCxHxW
     """
-    transform = transforms.Compose([transforms.ToPILImage()])
+    transform = T.Compose([T.ToPILImage()])
     return transform(tensor.squeeze(0).cpu())
-
-
-# def draw_box(image, x1, y1, x2, y2):
-#     draw = ImageDraw.Draw(image)
-#     # fill = (0,0,255)
-#     draw.rectangle((x1, y1, x2, y2))
-#     del draw
-
-
-# def draw_text(image, x, y, text):
-#     draw = ImageDraw.Draw(image)
-#     draw.text((x, y), text, fill=(255, 0, 0))
-#     del draw
 
 
 def grid_image(tensor_list, nrow=3):
@@ -246,4 +233,81 @@ class DehazeFilter(nn.Module):
         y[0][2] = (x[0][2] - a_b) / refined_t[0][2] + a_b
         y.clamp_(0, 1)
 
+        return y
+
+
+class SideWindowFilter(nn.Module):
+    def __init__(self, radius, iteration):
+        super(SideWindowFilter, self).__init__()
+        self.radius = radius
+        self.iteration = iteration
+        self.kernel_size = 2 * self.radius + 1
+
+        weight = torch.ones(1, 1, self.kernel_size, self.kernel_size)
+        L, R, U, D = [weight.clone() for _ in range(4)]
+
+        L[:, :, :, self.radius + 1:] = 0
+        R[:, :, :, 0: self.radius] = 0
+        U[:, :, self.radius + 1:, :] = 0
+        D[:, :, 0: self.radius, :] = 0
+
+        NW, NE, SW, SE = U.clone(), U.clone(), D.clone(), D.clone()
+
+        L = L/((self.radius + 1) * self.kernel_size)
+        R = R/((self.radius + 1) * self.kernel_size)
+        U = U/((self.radius + 1) * self.kernel_size)
+        D = D/((self.radius + 1) * self.kernel_size)
+
+        self.conv_l = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_l.weight.data = L
+        self.conv_r = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_r.weight.data = R
+        self.conv_u = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_u.weight.data = U
+        self.conv_d = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_d.weight.data = D
+
+        NW[:, :, :, self.radius + 1:] = 0
+        NE[:, :, :, 0: self.radius] = 0
+        SW[:, :, :, self.radius + 1:] = 0
+        SE[:, :, :, 0: self.radius] = 0
+
+        NW = NW/((self.radius + 1) ** 2)
+        NE = NW/((self.radius + 1) ** 2)
+        SW = SW/((self.radius + 1) ** 2)
+        SE = SE/((self.radius + 1) ** 2)
+        self.conv_nw = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_nw.weight.data = NW
+        self.conv_ne = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_ne.weight.data = NE
+        self.conv_sw = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_sw.weight.data = SW
+        self.conv_se = nn.Conv2d(1, 1, kernel_size=self.kernel_size, padding=self.radius, groups=1, bias=False)
+        self.conv_se.weight.data = SE
+
+    def forward(self, x):
+        B, C, H, W = x.size()
+
+        d = torch.zeros(B, 8, H, W).to(x.device) # dtype=torch.float
+        y = x.clone()
+
+        for ch in range(C):
+            x_ch = x[:, ch, ::].clone().view(B, 1, H, W)
+
+            for i in range(self.iteration):
+                d[:, 0, ::] = self.conv_l(x_ch) - x_ch
+                d[:, 1, ::] = self.conv_r(x_ch) - x_ch
+                d[:, 2, ::] = self.conv_u(x_ch) - x_ch
+                d[:, 3, ::] = self.conv_d(x_ch) - x_ch
+                d[:, 4, ::] = self.conv_nw(x_ch) - x_ch
+                d[:, 5, ::] = self.conv_ne(x_ch) - x_ch
+                d[:, 6, ::] = self.conv_sw(x_ch) - x_ch
+                d[:, 7, ::] = self.conv_se(x_ch) - x_ch
+
+                d_abs = torch.abs(d)
+                mask_min = torch.argmin(d_abs, dim=1, keepdim=True)
+                dm = torch.gather(input=d, dim=1, index=mask_min)
+                x_ch = dm + x_ch
+
+            y[:, ch, ::] = x_ch
         return y
